@@ -16,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class DefaultListableBeanFactory implements BeanFactory {
 
-    protected final Map<String, BeanDefinition> beanDefinitionMap =
+    public final Map<String, BeanDefinition> beanDefinitionMap =
             new ConcurrentHashMap<>(32);
 
     @Override
