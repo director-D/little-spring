@@ -1,5 +1,10 @@
 package org.springframework.beans.factory.support;
 
+import org.springframework.annotation.Component;
+import org.springframework.annotation.Controller;
+import org.springframework.annotation.Repository;
+import org.springframework.annotation.Service;
+import org.springframework.annotation.mybatis.Mapper;
 import org.springframework.beans.factory.config.BeanDefinition;
 
 import java.io.File;
@@ -38,9 +43,6 @@ public class BeanDefinitionReader {
         if (url == null) {
             throw new Exception("包" + scanPackage + "不存在！");
         }
-        if (url == null) {
-            throw new Exception("包" + scanPackage + "不存在！");
-        }
         File classPath = new File(url.getFile());
         for (File file : classPath.listFiles()) {
             if (file.isDirectory()) {
@@ -64,6 +66,14 @@ public class BeanDefinitionReader {
         try {
             for (String className : registryBeanClasses) {
                 Class<?> beanClass = Class.forName(className);
+                // 判断是否有Controller、Service、Component、Repository等注解标记
+                if (!(beanClass.isAnnotationPresent(Component.class) ||
+                        beanClass.isAnnotationPresent(Controller.class) ||
+                        beanClass.isAnnotationPresent(Service.class) ||
+                        beanClass.isAnnotationPresent(Repository.class) ||
+                        beanClass.isAnnotationPresent(Mapper.class))) {
+                    continue;
+                }
                 if (beanClass.isInterface()) {
                     // 如果是接口则跳过
                     continue;

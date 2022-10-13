@@ -1,11 +1,15 @@
 package org.springframework.context.support;
 
 import org.springframework.annotation.*;
+import org.springframework.annotation.mybatis.Mapper;
+import org.springframework.aop.AopUtils;
+import org.springframework.aop.support.AdvisedSupport;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.BeanDefinitionReader;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.context.ApplicationContext;
+import org.springframework.mybatis.utils.MyBatisUtils;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -41,8 +45,14 @@ public abstract class AbstractApplicationContext extends DefaultListableBeanFact
 
         // 扫描需要扫描的包，并把相关的类转化为beanDefinition
         List<BeanDefinition> beanDefinitions = reader.loadBeanDefinitions();
+        //初始化JDBC环境信息
+        MyBatisUtils.instantiationMybatisConfig("application.properties");
+        //扫描mapper
+        MyBatisUtils.scanMappperBeanDefinition(beanDefinitions);
         // 注册，将beanDefinition放入IOC容器存储
         doRegisterBeanDefinition(beanDefinitions);
+        // 初始化AOP配置类
+        AopUtils.instantiationAopConfig(beanDefinitions);
         // 将非懒加载的类初始化
         doAutowired();
 
@@ -98,7 +108,16 @@ public abstract class AbstractApplicationContext extends DefaultListableBeanFact
         return null;
     }
 
-    private void populateBean(Object instance) {
+    private void populateBean(Object instance) throws Exception {
+
+        // 判断是否是代理类
+        if (AopUtils.isAopProxy(instance)) {
+            instance = AopUtils.getTarget(instance);
+        }
+
+        if(instance == null){
+            return;
+        }
         Class clazz = instance.getClass();
         // 判断是否有Controller、Service、Component、Repository等注解标记
         if (!(clazz.isAnnotationPresent(Component.class) ||
@@ -138,8 +157,32 @@ public abstract class AbstractApplicationContext extends DefaultListableBeanFact
                 instance = this.factoryBeanObjectCache.get(className);
             } else {
                 Class<?> clazz = Class.forName(className);
-                instance = clazz.newInstance();
+                //
+                if(clazz.isAnnotationPresent(Mapper.class)){
+                    //接入mybatis 功能
+                    instance= MyBatisUtils.createProxy(clazz).getProxy();
+                }else {
+                    instance = clazz.newInstance();
+                }
 
+
+
+
+                // 接入AOP功能
+                for (AdvisedSupport aspect : AopUtils.CONFIGS) {
+                    aspect.setTargetClass(clazz);
+                    aspect.setTarget(instance);
+
+                    if (aspect.pointCutMatch()) {
+                        instance = AopUtils.createProxy(aspect).getProxy();
+                    }
+                }
+
+//                this.factoryBeanObjectCache.put(className, instance);
+//                this.factoryBeanObjectCache.put(beanDefinition.getFactoryBeanName(), instance);
+
+
+                this.factoryBeanObjectCache.put(className, instance);
                 this.factoryBeanObjectCache.put(beanDefinition.getBeanClassName(), instance);
             }
         } catch (Exception e) {
